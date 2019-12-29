@@ -1,0 +1,25 @@
+#ifndef POWERSTEP_DEFINITIONS_H
+#define POWERSTEP_DEFINITIONS_H
+
+#include <QString>
+#include "definition_types.h"
+
+class DefinitionsClass
+{
+public:
+    typedef  enum {
+        STEP_MODE, I_GATE, T_BOOST, TCC, T_BLANK, DEADTIME, TVAL_HOLD, TVAL_RUN,
+        TVAL_DEC, TOFF_FAST, FAST_STEP, TON_MIN, TOFF_MIN, TSW,
+        CANT_PARAMETROS
+    } parametersID_t;
+    
+    static const parameter_t powerStep[];
+
+    /*
+    "stepMode", "iGate", "tBoost", "tcc", "tBlank", "tdt",
+    "tvalHold", "tvalRun", "tvalAcc", "tvalDec", "toffFast", "fastStep",
+    "tonMin", "toffMin", "tsw"
+    */
+};
+
+#endif // POWERSTEP_DEFINITIONS_H

@@ -1,0 +1,3 @@
+#include "PowerStep_Definitions.h"
+
+const parameter_t DefinitionsClass::
