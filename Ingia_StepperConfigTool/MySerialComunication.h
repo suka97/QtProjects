@@ -13,19 +13,21 @@ class MySerialComunication : public QSerialPort
 
 public:
     typedef enum {
-        _SUCCESS_, _ERROR_RESPONSE_, _ERROR_TIMEOUT_
+        _SUCCESS_, _ERROR_RESPONSE_, _ERROR_TIMEOUT_, _RESPONSE_TO_CHECK_
     } readResult_t;
 
 public:
     MySerialComunication(QObject *parent = nullptr);
-    void sendExpecting(QByteArray sendByteArray, QByteArray expectByteArray);
+    void sendExpecting(QByteArray sendByteArray, QByteArray expectByteArray = "");
     void setTimeout(int timeout) { _timeout = timeout; }
+    QList<QByteArray> lastResponseInParameters(uint8_t bytesPerParameter, QByteArray initString = nullptr, QByteArray endString = nullptr);
+    QByteArray lastResponse() { return _lastResponse; };
 
 signals:
     void readResult(readResult_t result);
 
 protected:
-    QByteArray _stringWeExpect;
+    QByteArray _stringWeExpect, _lastResponse;
     QBasicTimer _timer;
     int _timeout = 2000;
 

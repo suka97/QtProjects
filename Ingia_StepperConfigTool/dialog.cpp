@@ -11,6 +11,7 @@ Dialog::Dialog(QWidget *parent)
 
     updateAvailablePorts();
     serialPort = new MySerialComunication(this);
+    serialPort->setTimeout(2000);
     connect(serialPort, &MySerialComunication::readResult, this, &Dialog::checkResponseResult);
 
     mainLayout = new QGridLayout;
@@ -21,6 +22,9 @@ Dialog::Dialog(QWidget *parent)
     setLayout(mainLayout);
     mainLayout->setSizeConstraint(QLayout::SetMinimumSize);
     setWindowTitle(tr("Ingia Stepper Config Tool"));
+    setWindowFlags(windowFlags() | Qt::WindowMinimizeButtonHint);
+
+    busyBar = new MyBusyBar("Esperando respuesta...");  // preparo el busy para los envios
 }
 
 Dialog::~Dialog()
@@ -53,7 +57,14 @@ void Dialog::createParametersGroupBox() {
                 parametersDoubleSpinBox.last()->setDecimals(2);
                 parametersDoubleSpinBox.last()->setRange( limits.at(0).toDouble(), limits.at(1).toDouble() );
                 parametersDoubleSpinBox.last()->setSuffix( " "+limits.at(2) );
+                parametersDoubleSpinBox.last()->setSingleStep(limits.at(0).toDouble());
                 parametersLayout->addWidget(parametersDoubleSpinBox.last(), i, 1);
+                uint8_t thisIndex = parametersDoubleSpinBox.length() - 1;
+                connect(parametersDoubleSpinBox.last(), QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                    [=](){
+                        double div = parametersDoubleSpinBox.at(thisIndex)->value() / parametersDoubleSpinBox.at(thisIndex)->minimum();
+                        parametersDoubleSpinBox.at(thisIndex)->setValue( parametersDoubleSpinBox.at(thisIndex)->minimum() * std::round(div) );
+                    });
                 break;
             }
             case NUMBER: {
@@ -61,10 +72,6 @@ void Dialog::createParametersGroupBox() {
             }
         }
     }
-
-    checkButton = new QPushButton("Check");
-    parametersLayout->addWidget(checkButton);
-    connect(checkButton, &QPushButton::clicked, this, &Dialog::adjustSpinBoxValues);
 
     //parametersLayout->setColumnStretch(2, 1);
     parametersGroupBox->setLayout(parametersLayout);
@@ -89,7 +96,6 @@ void Dialog::createComunicationGroupBox() {
 
     connectButton = new QPushButton("Conectar");
     connect(connectButton, &QPushButton::clicked, this, &Dialog::connectPort);
-    connect(connectButton, &QPushButton::clicked, this, &Dialog::updateAvailablePorts);
     comunicationLayout->addWidget(connectButton, 1, 1);
 
     refreshPortsButton = new QPushButton("Refresh");
@@ -125,18 +131,6 @@ void Dialog::updateAvailablePorts() {
     // ------------------------------------------------
 }
 
-void Dialog::adjustSpinBoxValues() {
-    uint16_t multiplesIndex = 0;
-    for ( uint16_t i=0 ; powerStep01_parameters[i].name!="END_PARAMETER" ; i++ ) {
-        if ( powerStep01_parameters[i].inputType == MULTIPLES ) {
-            double div = parametersDoubleSpinBox.at(multiplesIndex)->value() / parametersDoubleSpinBox.at(multiplesIndex)->minimum();
-            parametersDoubleSpinBox.at(multiplesIndex)->setValue( parametersDoubleSpinBox.at(multiplesIndex)->minimum() * std::round(div) );
-
-            multiplesIndex++;
-        }
-    }
-}
-
 QByteArray Dialog::uint32ToByteArray(uint32_t n) {
     QByteArray byteArray;
     for ( uint8_t i=0 ; i<4 ; i++ ) {
@@ -151,10 +145,10 @@ uint32_t Dialog::getMultiplesCurrentIndex(QDoubleSpinBox *spinBox) {
 }
 
 void Dialog::checkResponseResult(MySerialComunication::readResult_t result) {
-    if ( _waitingResponse ) {
+    if ( _waitingState != NONE ) {
         switch (result) {
             case MySerialComunication::_SUCCESS_: {
-                QMessageBox::information(this, tr("OK"), "Parametros cargados exitosamente");
+                QMessageBox::information(this, tr("OK"), "Operacion exitosa");
                 break;
             }
             case MySerialComunication::_ERROR_TIMEOUT_: {
@@ -165,8 +159,34 @@ void Dialog::checkResponseResult(MySerialComunication::readResult_t result) {
                 QMessageBox::critical(this, tr("Error"), "Fallo en respuesta");
                 break;
             }
+        case MySerialComunication::_RESPONSE_TO_CHECK_: {
+                QList<QByteArray> response = serialPort->lastResponseInParameters(4);
+                if ( response.length() != getCantParam(powerStep01_parameters) )
+                    QMessageBox::critical(this, tr("Error"), "Fallo en respuesta");
+                else {
+                    loadDeviceValues( serialPort->lastResponseInParameters(4, "@@", "##") );
+                    QMessageBox::information(this, tr("OK"), "Operacion exitosa");
+                }
+                break;
+            }
         }
-        waitingForResponse(false);
+        waitingForResponse(NONE);
+    }
+}
+
+void Dialog::loadDeviceValues( QList<QByteArray> valuesArray ) {
+    uint16_t multiplesIndex = 0, discretesIndex = 0;
+    for ( uint16_t i=0 ; powerStep01_parameters[i].name!="END_PARAMETER" ; i++ ) {
+        double value = valuesArray.at(i).toDouble();
+
+        if ( powerStep01_parameters[i].inputType == MULTIPLES ) {
+            parametersDoubleSpinBox.at(multiplesIndex)->setValue(value);
+            multiplesIndex++;
+        }
+        else if ( powerStep01_parameters[i].inputType == DISCRETE ) {
+            parametersComboBox.at(discretesIndex)->setCurrentIndex(value);
+            discretesIndex++;
+        }
     }
 }
 
@@ -185,7 +205,8 @@ void Dialog::sendParameters() {
                 break;
             }
             case MULTIPLES: {
-                byteArray.append( uint32ToByteArray(getMultiplesCurrentIndex(parametersDoubleSpinBox.at(multiplesIndex))) );
+                uint32_t val = getMultiplesCurrentIndex(parametersDoubleSpinBox.at(multiplesIndex));
+                byteArray.append( uint32ToByteArray(val) );
                 multiplesIndex++;
                 break;
             }
@@ -196,19 +217,28 @@ void Dialog::sendParameters() {
     }
     byteArray.append("##");
     serialPort->sendExpecting(byteArray, byteArray);
-    waitingForResponse(true);
+    waitingForResponse(VERIFICATION);
 }
 
-// la trama empieza con '@@' y termina con '##', con 4 bytes para cada parametro
+// le mando "$$" para arrancar a leer
 void Dialog::readValuesFromDevice() {
-    QByteArray byteArray;
-    byteArray.append("@@");
+    serialPort->sendExpecting("$$");
+    waitingForResponse(RESPONSE);
 }
 
-void Dialog::waitingForResponse(bool state) {
-    parametersGroupBox->setEnabled(!state);
-    sendButtonBox->setEnabled(!state);
-    _waitingResponse = state;
+void Dialog::waitingForResponse(waitingState_t state) {
+    _waitingState = state;
+
+    if ( state == NONE ) {
+        busyBar->close();
+        parametersGroupBox->setEnabled(true);
+        sendButtonBox->setEnabled(true);
+    }
+    else {
+        parametersGroupBox->setEnabled(false);
+        sendButtonBox->setEnabled(false);
+        busyBar->show();
+    }
 }
 
 void Dialog::connectPort() {

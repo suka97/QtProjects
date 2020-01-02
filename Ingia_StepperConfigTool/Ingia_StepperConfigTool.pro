@@ -18,14 +18,18 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     DefinitionsClass.cpp \
+    MyBusyBar.cpp \
     MySerialComunication.cpp \
     main.cpp \
     dialog.cpp
 
 HEADERS += \
     DefinitionsClass.h \
+    MyBusyBar.h \
     MySerialComunication.h \
     dialog.h
+
+RC_ICONS = ingia.ico
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

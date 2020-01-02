@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QList>
 
+#include "MyBusyBar.h"
 #include "DefinitionsClass.h"
 #include "MySerialComunication.h"
 
@@ -22,6 +23,11 @@ class Dialog : public QDialog, public DefinitionsClass
 {
     Q_OBJECT
 
+public:
+    typedef enum {
+        RESPONSE, VERIFICATION, NONE
+    } waitingState_t;
+
 private slots:
     void sendParameters();
     void connectPort();
@@ -32,15 +38,15 @@ private:
     void createSendButtonBox();
     void createComunicationGroupBox();
     void setConnection(bool state);
-    void adjustSpinBoxValues();
     void readValuesFromDevice();
     QByteArray uint32ToByteArray(uint32_t n);
     uint32_t getMultiplesCurrentIndex(QDoubleSpinBox *spinBox);
     void checkResponseResult(MySerialComunication::readResult_t result);
-    void waitingForResponse(bool state);
+    void waitingForResponse(waitingState_t state);
+    void loadDeviceValues(QList<QByteArray> valuesArray);
 
     bool _isConnected = false;
-    bool _waitingResponse = false;
+    waitingState_t _waitingState = NONE;
 
     QGridLayout *mainLayout;
     MySerialComunication *serialPort;
@@ -50,7 +56,6 @@ private:
     QList <QComboBox *> parametersComboBox;
     QList <QDoubleSpinBox *> parametersDoubleSpinBox;
     QList <QLabel *> parametersLabel;
-    QPushButton *checkButton;
 
     QDialogButtonBox *sendButtonBox;
     QPushButton *sendButton, *readButton;
@@ -59,6 +64,8 @@ private:
     QGridLayout *comunicationLayout;
     QPushButton *connectButton, *refreshPortsButton;
     QComboBox *portsComboBox;
+
+    MyBusyBar *busyBar;
 
 public:
     Dialog(QWidget *parent = nullptr);
