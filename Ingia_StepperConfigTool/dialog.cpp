@@ -146,6 +146,7 @@ uint32_t Dialog::getMultiplesCurrentIndex(QDoubleSpinBox *spinBox) {
 
 void Dialog::checkResponseResult(MySerialComunication::readResult_t result) {
     if ( _waitingState != NONE ) {
+        waitingForResponse(NONE);
         switch (result) {
             case MySerialComunication::_SUCCESS_: {
                 QMessageBox::information(this, tr("OK"), "Operacion exitosa");
@@ -159,28 +160,29 @@ void Dialog::checkResponseResult(MySerialComunication::readResult_t result) {
                 QMessageBox::critical(this, tr("Error"), "Fallo en respuesta");
                 break;
             }
-        case MySerialComunication::_RESPONSE_TO_CHECK_: {
-                QList<QByteArray> response = serialPort->lastResponseInParameters(4);
+            case MySerialComunication::_RESPONSE_TO_CHECK_: {
+                QList<QByteArray> response = serialPort->lastResponseInParameters(4, "@@", "##");
                 if ( response.length() != getCantParam(powerStep01_parameters) )
                     QMessageBox::critical(this, tr("Error"), "Fallo en respuesta");
                 else {
-                    loadDeviceValues( serialPort->lastResponseInParameters(4, "@@", "##") );
+                    loadDeviceValues( response );
                     QMessageBox::information(this, tr("OK"), "Operacion exitosa");
                 }
                 break;
             }
         }
-        waitingForResponse(NONE);
     }
 }
 
 void Dialog::loadDeviceValues( QList<QByteArray> valuesArray ) {
     uint16_t multiplesIndex = 0, discretesIndex = 0;
     for ( uint16_t i=0 ; powerStep01_parameters[i].name!="END_PARAMETER" ; i++ ) {
-        double value = valuesArray.at(i).toDouble();
+        uint32_t value;
+        QDataStream data(valuesArray.at(i)); data.setByteOrder(QDataStream::LittleEndian);
+        data >> value;
 
         if ( powerStep01_parameters[i].inputType == MULTIPLES ) {
-            parametersDoubleSpinBox.at(multiplesIndex)->setValue(value);
+            parametersDoubleSpinBox.at(multiplesIndex)->setValue((value+1) * parametersDoubleSpinBox.at(multiplesIndex)->minimum());
             multiplesIndex++;
         }
         else if ( powerStep01_parameters[i].inputType == DISCRETE ) {
