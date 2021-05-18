@@ -132,7 +132,7 @@
       <item>
        <widget class="QPushButton" name="cargar_btn">
         <property name="enabled">
-         <bool>true</bool>
+         <bool>false</bool>
         </property>
         <property name="text">
          <string>Cargar</string>
@@ -142,7 +142,7 @@
       <item>
        <widget class="QPushButton" name="descargar_btn">
         <property name="enabled">
-         <bool>true</bool>
+         <bool>false</bool>
         </property>
         <property name="text">
          <string>Descargar</string>
