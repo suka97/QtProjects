@@ -78,7 +78,7 @@
              <bool>true</bool>
             </property>
             <property name="text">
-             <string/>
+             <string>D:/Desktop/test/download</string>
             </property>
            </widget>
           </item>
@@ -96,7 +96,7 @@
           <item>
            <widget class="QLineEdit" name="token_text">
             <property name="text">
-             <string/>
+             <string>APP_USR-5949631012072735-051817-a86c044b3c470cda1fc3557e451b84f3-752047549</string>
             </property>
            </widget>
           </item>
@@ -130,9 +130,19 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="publicar_btn">
+       <widget class="QPushButton" name="cargar_btn">
         <property name="enabled">
-         <bool>false</bool>
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Cargar</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="descargar_btn">
+        <property name="enabled">
+         <bool>true</bool>
         </property>
         <property name="text">
          <string>Descargar</string>
@@ -149,7 +159,7 @@
      <x>0</x>
      <y>0</y>
      <width>705</width>
-     <height>22</height>
+     <height>26</height>
     </rect>
    </property>
   </widget>

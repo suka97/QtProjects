@@ -6,6 +6,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 import sys, webbrowser, apis, time, json, requests, mimetypes
 from os import listdir, mkdir, path
+from shutil import copyfile
 
 # pyinstaller path
 try:
@@ -37,19 +38,18 @@ class Worker(QObject):
         self.running = True
         self.progress_index = 0
         
-        self.progress.emit(self.progress_index, 'Contando Productos...')
-        error = True
-        while error and self.running:
-            try:
-                rta = apis.ml_getProducts(self.params['access_token'])
-                self.progress.emit(len(rta), 'Encontrados '+str(len(rta))+' Productos')
-                error = False
-            except:
-                self.progress.emit(self.progress_index, 'ERROR... REINTENTANDO')
-                time.sleep(2)
-                pass
-        
-        if ( self.running ):
+        if ( self.running and self.params['action']=='descargar' ):
+            self.progress.emit(self.progress_index, 'Contando Productos...')
+            error = True
+            while error and self.running:
+                try:
+                    rta = apis.ml_getProducts(self.params['access_token'])
+                    self.progress.emit(len(rta), 'Encontrados '+str(len(rta))+' Productos')
+                    error = False
+                except:
+                    self.progress.emit(self.progress_index, 'ERROR... REINTENTANDO')
+                    time.sleep(2)
+                    pass
             self.progress.emit(self.progress_index, 'Guardando Productos...')
             max_results = len(rta)
             for i in range(self.progress_index, max_results):
@@ -86,6 +86,35 @@ class Worker(QObject):
                         else: max_intentos -= 1
                         pass
 
+        if ( self.running and self.params['action']=='cargar' ):
+            carpetas = [path.join(self.params['save_folder'],f) for f in listdir(self.params['save_folder']) if not path.isfile(path.join(self.params['save_folder'], f))]
+            self.progress.emit(self.progress_index, 'Cargando Productos...')
+            for c in carpetas:
+                self.progress.emit(self.progress_index, path.basename(c))
+                file = open(c+'/datos.json', "r")
+                datos = json.loads(file.read())
+                file.close()
+                nombre_carpeta = path.basename(c)
+                imagenes = [f for f in listdir(c) if path.isfile(path.join(c, f))]
+                imagenes.remove('datos.json')
+                upload_error = True
+                while upload_error and self.running:
+                    try:
+                        up_imagenes = []
+                        for imagen in imagenes:
+                            tmp_file = sys_path+'/temp'+path.splitext(imagen)[1]
+                            copyfile(path.join(c,imagen), tmp_file)
+                            up_imagenes.append( {'source':apis.upload_ninja(tmp_file)} )
+                        ml_id = apis.publicar(self.params['access_token'], datos, up_imagenes)
+                        self.progress.emit(self.progress_index, '-> '+ml_id)
+                        upload_error = False
+                    except:
+                        self.progress.emit(self.progress_index, 'ERROR SUBIDA... REINTENTANDO')
+                        time.sleep(2)
+                        pass
+                    self.progress_index += 1
+                    if not self.running: return
+
         self.progress.emit(self.progress_index, '')
         self.finished.emit()
 
@@ -105,7 +134,8 @@ class Ui(QtWidgets.QMainWindow):
         self.token_btn.clicked.connect(self.onClick_token_btn)
         self.carpeta_btn.clicked.connect(self.onClick_carpeta_btn)
         self.verificar_btn.clicked.connect(self.onClick_verificar_btn)
-        self.publicar_btn.clicked.connect(self.onClick_publicar_btn)
+        self.descargar_btn.clicked.connect(self.onClick_descargar_btn)
+        self.cargar_btn.clicked.connect(self.onClick_cargar_btn)
         self.show()        
 
     def initWorkerThread(self):
@@ -113,8 +143,8 @@ class Ui(QtWidgets.QMainWindow):
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.reportProgress)
-        self.worker.error.connect(self.onPublicar_error)
-        self.thread.finished.connect(self.onPublicar_finished)
+        self.worker.error.connect(self.onDescargar_error)
+        self.thread.finished.connect(self.onDescargar_finished)
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
@@ -131,29 +161,44 @@ class Ui(QtWidgets.QMainWindow):
         self.accessToken = apis.ml_getAccessToken(self.token_text.text())
         if self.accessToken.startswith('APP_USR'):
             self.log_text.append('ML TOKEN: ' + self.accessToken)
-            self.publicar_btn.setEnabled(True)
+            self.descargar_btn.setEnabled(True)
             self.verificar_btn.setEnabled(False)
             self.token_btn.setEnabled(False)
             self.token_text.setEnabled(False)
         else:
             self.log_text.append('TOKEN INVALIDO')
 
-    def onClick_publicar_btn(self):
+    def onClick_descargar_btn(self):
         if not self.running :
-            self.publicar()
+            self.descargar()
         else :
             self.worker.cancelar()
             self.thread.exit()
             self.running = False
-            self.publicar_btn.setText('Descargar')
+            self.descargar_btn.setText('Descargar')
+            self.config_groupBox.setEnabled(True)
+            self.progressBar.setEnabled(False)
+            self.cancelado = True
+    
+    def onClick_cargar_btn(self):
+        if not self.running :
+            self.cargar()
+        else :
+            self.worker.cancelar()
+            self.thread.exit()
+            self.running = False
+            self.cargar_btn.setText('Descargar')
             self.config_groupBox.setEnabled(True)
             self.progressBar.setEnabled(False)
             self.cancelado = True
 
-    def onPublicar_finished(self):
+    def onDescargar_finished(self):
         self.running = False
         self.thread.exit()
-        self.publicar_btn.setText('Descargar')
+        self.descargar_btn.setText('Descargar')
+        self.cargar_btn.setText('Cargar')
+        self.cargar_btn.setEnabled(True)
+        self.descargar_btn.setEnabled(True)
         self.config_groupBox.setEnabled(True)
         self.progressBar.setEnabled(False)
         if not self.cancelado:
@@ -161,11 +206,12 @@ class Ui(QtWidgets.QMainWindow):
             msg = QtWidgets.QMessageBox()
             msg.information(self,'Backup Realizado', 'Ya están todos bombón😘')
 
-    def onPublicar_error(self):
+    def onDescargar_error(self):
         msg = QtWidgets.QMessageBox()
         msg.critical(self,'Error', 'Error de subida')
         self.worker.cancelar()
-        self.publicar_btn.setText('Descargar')
+        self.descargar_btn.setText('Descargar')
+        self.cargar_btn.setText('Cargar')
         self.config_groupBox.setEnabled(True)
         self.progressBar.setEnabled(False)
         self.running = False
@@ -175,8 +221,7 @@ class Ui(QtWidgets.QMainWindow):
         self.progressBar.setValue(n)
         self.log_text.append(log_text)
 
-    scroll_id = ''
-    def publicar(self):
+    def descargar(self):
         if not path.exists(self.carpeta_text.text()):
             msg = QtWidgets.QMessageBox()
             msg.critical(self,'Carpeta Invalida', 'Carpeta "'+self.carpeta_text.text()+'" invalida')
@@ -185,16 +230,43 @@ class Ui(QtWidgets.QMainWindow):
             msg = QtWidgets.QMessageBox()
             msg.critical(self,'Carpeta Invalida', 'La carpeta "'+self.carpeta_text.text()+'" no esta vacia')
             return
+        self.progressBar.setValue(0)
         self.progressBar.setMaximum(1)
         self.progressBar.setEnabled(True)
         self.config_groupBox.setEnabled(False)
-        self.publicar_btn.setText('Cancelar')
+        self.descargar_btn.setText('Cancelar')
+        self.cargar_btn.setEnabled(False)
         self.worker = Worker()
         self.worker.setParams({
-            'access_token' : self.accessToken, #self.token_text.text()
-            'save_folder' : self.carpeta_text.text()
+            # 'access_token' : self.token_text.text(),
+            'access_token' : self.accessToken, 
+            'save_folder' : self.carpeta_text.text(),
+            'action' : 'descargar'
         })
         self.initWorkerThread()
+
+    def cargar(self):
+        msg = QtWidgets.QMessageBox()
+        if not path.exists(self.carpeta_text.text()):
+            msg.critical(self,'Carpeta Invalida', 'Carpeta "'+self.carpeta_text.text()+'" invalida')
+            return
+        carpetas = [path.join(self.carpeta_text.text(),f) for f in listdir(self.carpeta_text.text()) if not path.isfile(path.join(self.carpeta_text.text(), f))]
+        respuesta = msg.question(self,'Confirmación', '¿Estas segura de subir '+str(len(carpetas))+' productos?', msg.Yes | msg.No)
+        if respuesta == msg.Yes:
+            self.progressBar.setValue(0)
+            self.progressBar.setMaximum(len(carpetas))
+            self.progressBar.setEnabled(True)
+            self.config_groupBox.setEnabled(False)
+            self.cargar_btn.setText('Cancelar')
+            self.descargar_btn.setEnabled(False)
+            self.worker = Worker()
+            self.worker.setParams({
+                # 'access_token' : self.token_text.text(),
+                'access_token' : self.accessToken, 
+                'save_folder' : self.carpeta_text.text(),
+                'action' : 'cargar'
+            })
+            self.initWorkerThread()
 
 
 app = QtWidgets.QApplication(sys.argv)
