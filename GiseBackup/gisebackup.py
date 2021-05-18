@@ -191,7 +191,7 @@ class Ui(QtWidgets.QMainWindow):
         self.publicar_btn.setText('Cancelar')
         self.worker = Worker()
         self.worker.setParams({
-            'access_token' : self.accessToken,
+            'access_token' : self.accessToken, #self.token_text.text()
             'save_folder' : self.carpeta_text.text()
         })
         self.initWorkerThread()
