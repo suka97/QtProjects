@@ -1,0 +1,5 @@
+# ignore all build folders
+build/*
+__pycache__/*
+dist/*
+dist/*.exe
