@@ -78,7 +78,7 @@
              <bool>true</bool>
             </property>
             <property name="text">
-             <string>D:/Desktop/test/download</string>
+             <string/>
             </property>
            </widget>
           </item>
@@ -96,7 +96,7 @@
           <item>
            <widget class="QLineEdit" name="token_text">
             <property name="text">
-             <string>APP_USR-5949631012072735-051817-a86c044b3c470cda1fc3557e451b84f3-752047549</string>
+             <string/>
             </property>
            </widget>
           </item>
@@ -159,7 +159,7 @@
      <x>0</x>
      <y>0</y>
      <width>705</width>
-     <height>26</height>
+     <height>22</height>
     </rect>
    </property>
   </widget>
